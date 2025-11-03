@@ -1,0 +1,78 @@
+{
+  "categories": [
+    {
+      "id": "missing_funds",
+      "label": "Missing Funds",
+      "description": "User reports funds not received or missing from wallet after sending or receiving",
+      "requiredFields": ["transactionHash", "network"],
+      "optionalFields": ["walletAddress", "token", "platform"]
+    },
+    {
+      "id": "wrong_network",
+      "label": "Wrong Network",
+      "description": "Funds sent via incorrect or unsupported network, causing visibility or access issues",
+      "requiredFields": ["transactionHash", "network"],
+      "optionalFields": ["walletAddress", "token", "platform"]
+    },
+    {
+      "id": "bridge_delay",
+      "label": "Bridge Delay",
+      "description": "Bridge transaction is delayed, stuck, or appears failed but may still be processing",
+      "requiredFields": ["transactionHash"],
+      "optionalFields": ["network", "token", "platform"]
+    },
+    {
+      "id": "wallet_confusion",
+      "label": "Wallet Confusion",
+      "description": "User confused about wallet setup, token visibility, account access, or missing token imports",
+      "requiredFields": [],
+      "optionalFields": ["walletAddress", "network", "token"]
+    },
+    {
+      "id": "scam_risk",
+      "label": "Scam Risk",
+      "description": "Potential scam, phishing attempt, suspicious DMs, or unauthorized activity reported",
+      "requiredFields": [],
+      "optionalFields": ["walletAddress", "platform"]
+    },
+    {
+      "id": "out_of_scope",
+      "label": "Out of Scope",
+      "description": "Query is not related to Web3 support or the supported ecosystem",
+      "requiredFields": [],
+      "optionalFields": []
+    }
+  ],
+  "extractableFields": {
+    "transactionHash": {
+      "label": "Transaction Hash",
+      "description": "Blockchain transaction identifier (0x... or near:...)",
+      "followUpPrompt": "Can you share the transaction hash? It usually starts with 0x or is a long string of characters."
+    },
+    "walletAddress": {
+      "label": "Wallet Address",
+      "description": "User's wallet or account address",
+      "followUpPrompt": "Could you provide your wallet address? This helps us locate your account."
+    },
+    "network": {
+      "label": "Network",
+      "description": "The blockchain network used (NEAR, Aurora, BSC, Ethereum, etc.)",
+      "followUpPrompt": "Which network did you use? (e.g., NEAR, Aurora, BSC, Ethereum)"
+    },
+    "token": {
+      "label": "Token",
+      "description": "The token symbol involved (USDC, NEAR, ETH, etc.)",
+      "followUpPrompt": "Which token are you referring to? (e.g., USDC, NEAR, ETH)"
+    },
+    "platform": {
+      "label": "Platform",
+      "description": "The platform or exchange mentioned (Binance, MetaMask, Rainbow, etc.)",
+      "followUpPrompt": "Which platform or exchange are you using? (e.g., Binance, MetaMask, Rainbow)"
+    }
+  },
+  "settings": {
+    "confidenceThreshold": 0.7,
+    "maxFollowUpTurns": 3,
+    "scamEscalationThreshold": 2
+  }
+}
