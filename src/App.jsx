@@ -1,0 +1,219 @@
+import { useState, useEffect, useCallback } from 'react';
+import Header from './components/Header';
+import ChatWindow from './components/ChatWindow';
+import {
+  loadSession,
+  saveSession,
+  addMessage,
+  addTriageResult,
+  updateEntities,
+  incrementOutOfScope,
+  incrementFollowUp,
+  resetFollowUp,
+  clearSession as clearStorageSession,
+  getConversationHistory,
+} from './utils/storage';
+import { runFullPipeline, ApiError } from './utils/api';
+import {
+  evaluateQuery,
+  generateFollowUpPrompts,
+  isLowConfidence,
+  shouldEscalateScam,
+  getIntentCategory,
+} from './utils/decisionEngine';
+
+export default function App() {
+  const [session, setSession] = useState(() => loadSession());
+  const [isLoading, setIsLoading] = useState(false);
+  const [triageData, setTriageData] = useState(null);
+  const [viewMode, setViewMode] = useState('text');
+  const [confidenceBanner, setConfidenceBanner] = useState(null);
+  const [showScamWarning, setShowScamWarning] = useState(false);
+  const [pendingResult, setPendingResult] = useState(null);
+
+  // Check for scam escalation on session load
+  useEffect(() => {
+    if (shouldEscalateScam(session.outOfScopeCount)) {
+      setShowScamWarning(true);
+    }
+  }, [session.outOfScopeCount]);
+
+  const handleClearSession = useCallback(() => {
+    const fresh = clearStorageSession();
+    setSession(fresh);
+    setTriageData(null);
+    setConfidenceBanner(null);
+    setShowScamWarning(false);
+    setPendingResult(null);
+    setViewMode('text');
+  }, []);
+
+  const processQuery = useCallback(
+    async (query) => {
+      setIsLoading(true);
+      setTriageData(null);
+      setConfidenceBanner(null);
+
+      try {
+        // Add user message to conversation
+        const updatedSession = { ...session };
+        addMessage(updatedSession, { role: 'user', content: query });
+        setSession(updatedSession);
+
+        // Get conversation history for API context
+        const history = getConversationHistory(updatedSession);
+
+        // Run the full 4-stage pipeline
+        const result = await runFullPipeline(query, history);
+
+        // Update entity tracking
+        updateEntities(updatedSession, result.entities);
+
+        // Handle out-of-scope queries
+        if (result.intent === 'out_of_scope') {
+          const newCount = incrementOutOfScope(updatedSession);
+
+          if (shouldEscalateScam(newCount)) {
+            setShowScamWarning(true);
+            addMessage(updatedSession, {
+              role: 'system',
+              content:
+                'Out of scope query detected. Scam risk flag raised — moderator review recommended.',
+            });
+          } else {
+            addMessage(updatedSession, {
+              role: 'assistant',
+              content:
+                "This doesn't seem related to Web3 support. Could you describe your issue with more detail? For example, any problems with transactions, wallets, or bridging?",
+            });
+          }
+
+          setSession({ ...updatedSession });
+          return;
+        }
+
+        // Evaluate if query is complete or needs follow-up
+        const evaluation = evaluateQuery(
+          result.intent,
+          result.entities,
+          updatedSession.followUpCount
+        );
+
+        if (evaluation.mode === 'follow_up' && !evaluation.shouldForceTriage) {
+          // Incomplete query mode — ask follow-up questions
+          incrementFollowUp(updatedSession);
+          const prompts = generateFollowUpPrompts(evaluation.missingFields);
+          const followUpMessage = prompts.join(' ');
+
+          addMessage(updatedSession, {
+            role: 'assistant',
+            content: followUpMessage,
+          });
+
+          // Still show partial triage data
+          setTriageData(result);
+          setSession({ ...updatedSession });
+          return;
+        }
+
+        // Full triage mode — show complete analysis
+        if (evaluation.shouldForceTriage) {
+          addMessage(updatedSession, {
+            role: 'system',
+            content:
+              'Max follow-ups reached — generating triage with available information.',
+          });
+        }
+
+        resetFollowUp(updatedSession);
+
+        // Check for low confidence
+        if (isLowConfidence(result.confidence)) {
+          setPendingResult(result);
+          setConfidenceBanner({
+            intent: getIntentCategory(result.intent)?.label || result.intent,
+            confidence: result.confidence,
+          });
+          setSession({ ...updatedSession });
+          return;
+        }
+
+        // High enough confidence — show triage directly
+        addTriageResult(updatedSession, result);
+        addMessage(updatedSession, {
+          role: 'assistant',
+          content: result.reply,
+        });
+
+        setTriageData(result);
+        setSession({ ...updatedSession });
+      } catch (error) {
+        const errorMessage =
+          error instanceof ApiError
+            ? error.message
+            : 'Something went wrong. Please try again.';
+
+        const updatedSession = { ...session };
+        addMessage(updatedSession, { role: 'error', content: errorMessage });
+        setSession(updatedSession);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [session]
+  );
+
+  const handleConfirmConfidence = useCallback(() => {
+    if (!pendingResult) return;
+
+    const updatedSession = { ...session };
+    addTriageResult(updatedSession, pendingResult);
+    addMessage(updatedSession, {
+      role: 'assistant',
+      content: pendingResult.reply,
+    });
+
+    setTriageData(pendingResult);
+    setConfidenceBanner(null);
+    setPendingResult(null);
+    setSession(updatedSession);
+  }, [pendingResult, session]);
+
+  const handleProvideMoreInfo = useCallback(() => {
+    setConfidenceBanner(null);
+    setPendingResult(null);
+    // User can just type more info in the input
+  }, []);
+
+  const handleSendMessage = useCallback(
+    (query) => {
+      processQuery(query);
+    },
+    [processQuery]
+  );
+
+  return (
+    <div className="flex h-screen flex-col bg-gray-950">
+      <Header onClearSession={handleClearSession} />
+
+      {/* Demo Notice Banner */}
+      <div className="border-b border-gray-800/50 bg-gray-900/50 px-4 py-1.5 text-center text-[11px] text-gray-500">
+        Prototype Demo — In production, QueryLens connects to internal AI models trained on historical support data.
+        This demo uses OpenAI for demonstration purposes only.
+      </div>
+
+      <ChatWindow
+        messages={session.messages}
+        triageData={triageData}
+        onSendMessage={handleSendMessage}
+        isLoading={isLoading}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        confidenceBanner={confidenceBanner}
+        onConfirmConfidence={handleConfirmConfidence}
+        onProvideMoreInfo={handleProvideMoreInfo}
+        showScamWarning={showScamWarning}
+      />
+    </div>
+  );
+}
