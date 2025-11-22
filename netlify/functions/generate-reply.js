@@ -33,7 +33,7 @@ exports.handler = async (event) => {
       };
     }
 
-    const openai = await createOpenAIClient();
+    const openai = createOpenAIClient();
 
     const contextMessage = `Triage analysis:
 - Issue type: ${triage.issueType || 'Unknown'}

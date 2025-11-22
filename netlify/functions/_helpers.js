@@ -1,8 +1,9 @@
 'use strict';
 
+const OpenAI = require('openai');
+
 // openai client via openrouter - swap for internal model in prod
-async function createOpenAIClient() {
-  const { default: OpenAI } = await import('openai');
+function createOpenAIClient() {
   return new OpenAI({
     baseURL: 'https://openrouter.ai/api/v1',
     apiKey: process.env.OPENAI_API_KEY,

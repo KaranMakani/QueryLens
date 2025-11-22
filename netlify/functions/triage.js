@@ -47,7 +47,7 @@ exports.handler = async (event) => {
       };
     }
 
-    const openai = await createOpenAIClient();
+    const openai = createOpenAIClient();
 
     const contextMessage = `Classified intent: ${intent}
 Extracted entities: ${JSON.stringify(entities, null, 2)}

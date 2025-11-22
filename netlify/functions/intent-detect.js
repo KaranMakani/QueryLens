@@ -40,7 +40,7 @@ exports.handler = async (event) => {
       };
     }
 
-    const openai = await createOpenAIClient();
+    const openai = createOpenAIClient();
 
     const messages = [
       { role: 'system', content: SYSTEM_PROMPT },
