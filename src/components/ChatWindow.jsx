@@ -1,13 +1,10 @@
 import React, { useRef, useEffect, useState } from 'react';
 import MessageBubble from './MessageBubble';
-import TriageOutput from './TriageOutput';
-import JsonView from './JsonView';
 import ConfidenceBanner from './ConfidenceBanner';
 import ScamWarning from './ScamWarning';
 
 export default function ChatWindow({
   messages,
-  triageData,
   onSendMessage,
   isLoading,
   viewMode,
@@ -16,6 +13,7 @@ export default function ChatWindow({
   onConfirmConfidence,
   onProvideMoreInfo,
   showScamWarning,
+  onClearSession,
 }) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
@@ -23,7 +21,7 @@ export default function ChatWindow({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, triageData, confidenceBanner, showScamWarning]);
+  }, [messages, confidenceBanner, showScamWarning]);
 
   useEffect(() => {
     if (!isLoading) inputRef.current?.focus();
@@ -81,7 +79,12 @@ export default function ChatWindow({
           )}
 
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              viewMode={viewMode}
+              onViewModeChange={onViewModeChange}
+            />
           ))}
 
           {/* Confidence Banner */}
@@ -96,52 +99,6 @@ export default function ChatWindow({
 
           {/* Scam Warning */}
           {showScamWarning && <ScamWarning />}
-
-          {/* Triage Output */}
-          {triageData && (
-            <div className="space-y-3">
-              {/* View Mode Toggle */}
-              <div className="flex items-center gap-1 rounded-lg bg-gray-800/50 p-1">
-                <button
-                  onClick={() => onViewModeChange('text')}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    viewMode === 'text'
-                      ? 'bg-brand-600 text-white'
-                      : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  Triage View
-                </button>
-                <button
-                  onClick={() => onViewModeChange('json')}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                    viewMode === 'json'
-                      ? 'bg-brand-600 text-white'
-                      : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  JSON View
-                </button>
-              </div>
-
-              {viewMode === 'text' ? (
-                <TriageOutput
-                  triage={triageData.triage}
-                  intent={triageData.intent}
-                  entities={triageData.entities}
-                  reply={triageData.reply}
-                />
-              ) : (
-                <JsonView
-                  triage={triageData.triage}
-                  intent={triageData.intent}
-                  entities={triageData.entities}
-                  confidence={triageData.confidence}
-                  reasoning={triageData.reasoning}
-                />
-              )}
-            </div>
-          )}
 
           {/* Loading Indicator */}
           {isLoading && (
@@ -166,6 +123,27 @@ export default function ChatWindow({
           onSubmit={handleSubmit}
           className="mx-auto flex max-w-3xl items-end gap-3 px-4 py-3"
         >
+          {/* Reset button - show when conversation exists */}
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={onClearSession}
+              className="flex h-[46px] items-center gap-1.5 rounded-lg border border-gray-700 bg-gray-800 px-3 text-xs text-gray-400 transition-colors hover:border-red-500/40 hover:text-red-400"
+              title="Start new conversation"
+            >
+              <svg
+                className="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+              </svg>
+              New
+            </button>
+          )}
+
           <div className="flex-1">
             <textarea
               ref={inputRef}

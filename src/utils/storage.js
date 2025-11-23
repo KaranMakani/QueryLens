@@ -85,6 +85,14 @@ export function resetFollowUp(session) {
   saveSession(session);
 }
 
+export function updateMessage(session, messageId, updates) {
+  const idx = session.messages.findIndex((m) => m.id === messageId);
+  if (idx !== -1) {
+    session.messages[idx] = { ...session.messages[idx], ...updates };
+    saveSession(session);
+  }
+}
+
 export function clearSession() {
   localStorage.removeItem(STORAGE_KEY);
   return createDefaultSession();
