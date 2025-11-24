@@ -46,7 +46,7 @@
   "extractableFields": {
     "transactionHash": {
       "label": "Transaction Hash",
-      "description": "Blockchain transaction identifier (0x... or near:...)",
+      "description": "Blockchain transaction identifier (0x... hex format)",
       "followUpPrompt": "Can you share the transaction hash? It usually starts with 0x or is a long string of characters."
     },
     "walletAddress": {
@@ -56,18 +56,18 @@
     },
     "network": {
       "label": "Network",
-      "description": "The blockchain network used (NEAR, Aurora, BSC, Ethereum, etc.)",
-      "followUpPrompt": "Which network did you use? (e.g., NEAR, Aurora, BSC, Ethereum)"
+      "description": "The blockchain network used (Ethereum, BSC, Polygon, Arbitrum, Solana, etc.)",
+      "followUpPrompt": "Which network did you use? (e.g., Ethereum, BSC, Polygon, Arbitrum)"
     },
     "token": {
       "label": "Token",
-      "description": "The token symbol involved (USDC, NEAR, ETH, etc.)",
-      "followUpPrompt": "Which token are you referring to? (e.g., USDC, NEAR, ETH)"
+      "description": "The token symbol involved (USDC, ETH, USDT, BTC, etc.)",
+      "followUpPrompt": "Which token are you referring to? (e.g., USDC, ETH, USDT)"
     },
     "platform": {
       "label": "Platform",
-      "description": "The platform or exchange mentioned (Binance, MetaMask, Rainbow, etc.)",
-      "followUpPrompt": "Which platform or exchange are you using? (e.g., Binance, MetaMask, Rainbow)"
+      "description": "The platform or exchange mentioned (Binance, MetaMask, OKX, etc.)",
+      "followUpPrompt": "Which platform or exchange are you using? (e.g., Binance, MetaMask, OKX)"
     }
   },
   "settings": {

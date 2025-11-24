@@ -47,22 +47,22 @@ const EXTRACT_PROMPT = `You are the information extraction module of a Web3 supp
 Your job is to extract structured entities from user queries related to Web3 support.
 
 Extract these fields if present:
-- transactionHash: Blockchain transaction identifier (0x... hex or NEAR tx hash)
+- transactionHash: Blockchain transaction identifier (0x... hex format)
 - walletAddress: Wallet or account address
-- network: Blockchain network mentioned (NEAR, Aurora, BSC, Ethereum, Polygon, etc.)
-- token: Token symbol (USDC, NEAR, ETH, USDT, etc.)
-- platform: Platform or exchange (Binance, MetaMask, Rainbow, OKX, etc.)
+- network: Blockchain network mentioned (Ethereum, BSC, Polygon, Arbitrum, Solana, etc.)
+- token: Token symbol (USDC, ETH, USDT, BTC, etc.)
+- platform: Platform or exchange (Binance, MetaMask, OKX, etc.)
 
 Rules:
 - Return ONLY valid JSON with this exact structure: { "entities": { "transactionHash": null, "walletAddress": null, "network": null, "token": null, "platform": null } }
 - Set fields to null if not found in the query
 - Be precise — don't guess or infer values that aren't clearly stated
 - Consider conversation history — information may have been provided in earlier messages
-- Transaction hashes are typically 0x followed by 64 hex chars, or NEAR-style hashes
+- Transaction hashes are typically 0x followed by 64 hex chars
 - Network names should be normalized (e.g., "Binance Smart Chain" → "BSC", "Ether" → "Ethereum")`;
 
 // --- Triage ---
-const TRIAGE_PROMPT = `You are the triage analysis module of a Web3 support triage system for NEAR Protocol and Aurora ecosystem.
+const TRIAGE_PROMPT = `You are the triage analysis module of a Web3 support triage system.
 
 Your job is to generate a structured triage analysis based on the classified intent and extracted information.
 
@@ -79,9 +79,16 @@ You must return a JSON object with this exact structure:
 
 Guidelines:
 - Confidence should be "High" only when the cause is nearly certain, "Medium" for likely causes, "Low" when uncertain
-- likelyCause should reference known patterns: wrong network withdrawals, missing token imports, bridge delays, wrong address sends, scam attempts
+- likelyCause should reference known patterns:
+  * Wrong network withdrawals from exchanges (e.g. sending via BSC when the wallet expects an L2)
+  * Tokens not visible due to missing token import in wallet
+  * Bridge delays mistaken for failed transactions (cross-chain bridges can take 30min+)
+  * Funds sent to wrong address
+  * Scam attempts via DM or fake admin contacts
+- When the user mentions a bridge or network issue but doesn't specify details, ask which bridge they used, which networks (from/to), and the transaction hash
 - suggestedReply should be natural and slightly informal (2-3 sentences max)
-- If missingInfo is not empty, the suggestedReply should politely ask for the missing information`;
+- If missingInfo is not empty, the suggestedReply should politely ask for the missing information
+- Do NOT assume or hardcode specific bridge names, networks, or protocols — ask the user for specifics`;
 
 // --- Reply Generation ---
 const REPLY_PROMPT = `You are the response generation module of a Web3 support triage system.
