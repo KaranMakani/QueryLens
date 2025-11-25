@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Header from './components/Header';
-import ChatWindow from './components/ChatWindow';
+import QueryPanel from './components/QueryPanel';
+import AnalysisPanel from './components/AnalysisPanel';
 import {
   loadSession,
   addMessage,
-  updateMessage,
   updateEntities,
   incrementOutOfScope,
   incrementFollowUp,
@@ -29,6 +29,14 @@ export default function App() {
   const [showScamWarning, setShowScamWarning] = useState(false);
   const [pendingResult, setPendingResult] = useState(null);
 
+  // derive the active triage from latest message that has it
+  const activeTriage = useMemo(() => {
+    for (let i = session.messages.length - 1; i >= 0; i--) {
+      if (session.messages[i].triageData) return session.messages[i].triageData;
+    }
+    return null;
+  }, [session.messages]);
+
   useEffect(() => {
     if (shouldEscalateScam(session.outOfScopeCount)) {
       setShowScamWarning(true);
@@ -44,10 +52,6 @@ export default function App() {
     setViewMode('text');
   }, []);
 
-  const handleToggleView = useCallback((msgId, mode) => {
-    setViewMode(mode);
-  }, []);
-
   const processQuery = useCallback(
     async (query) => {
       setIsLoading(true);
@@ -60,13 +64,11 @@ export default function App() {
 
         const history = getConversationHistory(updatedSession);
         const result = await runFullPipeline(query, history);
-
         updateEntities(updatedSession, result.entities);
 
         // out of scope
         if (result.intent === 'out_of_scope') {
           const newCount = incrementOutOfScope(updatedSession);
-
           if (shouldEscalateScam(newCount)) {
             setShowScamWarning(true);
             addMessage(updatedSession, {
@@ -79,29 +81,20 @@ export default function App() {
               content: "This doesn't seem related to Web3 support. Could you describe your issue with more detail? For example, any problems with transactions, wallets, or bridging?",
             });
           }
-
           setSession({ ...updatedSession });
           return;
         }
 
-        // evaluate completeness
-        const evaluation = evaluateQuery(
-          result.intent,
-          result.entities,
-          updatedSession.followUpCount
-        );
-
+        // evaluate
+        const evaluation = evaluateQuery(result.intent, result.entities, updatedSession.followUpCount);
         if (evaluation.mode === 'follow_up' && !evaluation.shouldForceTriage) {
           incrementFollowUp(updatedSession);
           const prompts = generateFollowUpPrompts(evaluation.missingFields);
-
           addMessage(updatedSession, {
             role: 'assistant',
             content: prompts.join(' '),
-            // store partial triage inline so it persists
             triageData: result,
           });
-
           setSession({ ...updatedSession });
           return;
         }
@@ -113,10 +106,9 @@ export default function App() {
             content: 'Max follow-ups reached — generating triage with available information.',
           });
         }
-
         resetFollowUp(updatedSession);
 
-        // low confidence — ask before showing
+        // low confidence
         if (isLowConfidence(result.confidence)) {
           setPendingResult(result);
           setConfidenceBanner({
@@ -127,20 +119,15 @@ export default function App() {
           return;
         }
 
-        // high confidence — show triage inline with reply
+        // high confidence
         addMessage(updatedSession, {
           role: 'assistant',
           content: result.reply,
           triageData: result,
         });
-
         setSession({ ...updatedSession });
       } catch (error) {
-        const errorMessage =
-          error instanceof ApiError
-            ? error.message
-            : 'Something went wrong. Please try again.';
-
+        const errorMessage = error instanceof ApiError ? error.message : 'Something went wrong. Please try again.';
         const updatedSession = { ...session };
         addMessage(updatedSession, { role: 'error', content: errorMessage });
         setSession(updatedSession);
@@ -153,14 +140,12 @@ export default function App() {
 
   const handleConfirmConfidence = useCallback(() => {
     if (!pendingResult) return;
-
     const updatedSession = { ...session };
     addMessage(updatedSession, {
       role: 'assistant',
       content: pendingResult.reply,
       triageData: pendingResult,
     });
-
     setConfidenceBanner(null);
     setPendingResult(null);
     setSession(updatedSession);
@@ -171,34 +156,29 @@ export default function App() {
     setPendingResult(null);
   }, []);
 
-  const handleSendMessage = useCallback(
-    (query) => {
-      processQuery(query);
-    },
-    [processQuery]
-  );
-
   return (
     <div className="flex h-screen flex-col bg-gray-950">
       <Header onClearSession={handleClearSession} />
-
-      <div className="border-b border-gray-800/50 bg-gray-900/50 px-4 py-1.5 text-center text-[11px] text-gray-500">
-        Prototype Demo — In production, QueryLens connects to internal AI models trained on historical support data.
-        This demo uses OpenAI for demonstration purposes only.
+      <div className="border-b border-gray-800/40 bg-gray-900/30 px-4 py-1 text-center text-[10px] tracking-wide text-gray-600">
+        PROTOTYPE DEMO — In production, QueryLens connects to internal AI models trained on historical support data. This demo uses OpenAI for demonstration purposes only.
       </div>
-
-      <ChatWindow
-        messages={session.messages}
-        onSendMessage={handleSendMessage}
-        isLoading={isLoading}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        confidenceBanner={confidenceBanner}
-        onConfirmConfidence={handleConfirmConfidence}
-        onProvideMoreInfo={handleProvideMoreInfo}
-        showScamWarning={showScamWarning}
-        onClearSession={handleClearSession}
-      />
+      <div className="flex flex-1 overflow-hidden">
+        <QueryPanel
+          messages={session.messages}
+          onSendMessage={processQuery}
+          isLoading={isLoading}
+        />
+        <AnalysisPanel
+          triageData={activeTriage}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          confidenceBanner={confidenceBanner}
+          onConfirmConfidence={handleConfirmConfidence}
+          onProvideMoreInfo={handleProvideMoreInfo}
+          showScamWarning={showScamWarning}
+          isLoading={isLoading}
+        />
+      </div>
     </div>
   );
 }
