@@ -85,6 +85,7 @@ export async function runFullPipeline(query, conversationHistory = []) {
     confidence: intentResult.confidence,
     reasoning: intentResult.reasoning,
     entities: extractionResult.entities,
+    followUpQuestion: extractionResult.followUpQuestion || null,
     triage: triageResult.triage,
     reply: replyResult.reply,
   };

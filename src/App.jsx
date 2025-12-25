@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import QueryPanel from './components/QueryPanel';
 import AnalysisPanel from './components/AnalysisPanel';
@@ -15,11 +15,18 @@ import {
 import { runFullPipeline, ApiError } from './utils/api';
 import {
   evaluateQuery,
-  generateFollowUpPrompts,
   isLowConfidence,
   shouldEscalateScam,
   getIntentCategory,
 } from './utils/decisionEngine';
+
+// find the latest triage data from messages
+function getLatestTriage(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].triageData) return messages[i].triageData;
+  }
+  return null;
+}
 
 export default function App() {
   const [session, setSession] = useState(() => loadSession());
@@ -28,14 +35,6 @@ export default function App() {
   const [confidenceBanner, setConfidenceBanner] = useState(null);
   const [showScamWarning, setShowScamWarning] = useState(false);
   const [pendingResult, setPendingResult] = useState(null);
-
-  // derive the active triage from latest message that has it
-  const activeTriage = useMemo(() => {
-    for (let i = session.messages.length - 1; i >= 0; i--) {
-      if (session.messages[i].triageData) return session.messages[i].triageData;
-    }
-    return null;
-  }, [session.messages]);
 
   useEffect(() => {
     if (shouldEscalateScam(session.outOfScopeCount)) {
@@ -58,9 +57,10 @@ export default function App() {
       setConfidenceBanner(null);
 
       try {
-        const updatedSession = { ...session };
+        // deep copy messages array so React detects the change
+        const updatedSession = { ...session, messages: [...session.messages] };
         addMessage(updatedSession, { role: 'user', content: query });
-        setSession({ ...updatedSession });
+        setSession({ ...updatedSession, messages: [...updatedSession.messages] });
 
         const history = getConversationHistory(updatedSession);
         const result = await runFullPipeline(query, history);
@@ -77,11 +77,11 @@ export default function App() {
             });
           } else {
             addMessage(updatedSession, {
-              role: 'assistant',
-              content: "This doesn't seem related to Web3 support. Could you describe your issue with more detail? For example, any problems with transactions, wallets, or bridging?",
+              role: 'system',
+              content: 'Out of scope — not related to Web3 support. Ask the user for transaction or wallet details.',
             });
           }
-          setSession({ ...updatedSession });
+          setSession({ ...updatedSession, messages: [...updatedSession.messages] });
           return;
         }
 
@@ -89,13 +89,15 @@ export default function App() {
         const evaluation = evaluateQuery(result.intent, result.entities, updatedSession.followUpCount);
         if (evaluation.mode === 'follow_up' && !evaluation.shouldForceTriage) {
           incrementFollowUp(updatedSession);
-          const prompts = generateFollowUpPrompts(evaluation.missingFields);
+          // use AI-generated follow-up question (dynamic, asks for all missing info at once)
+          const followUp = result.followUpQuestion
+            || `Could you provide more details? Missing: ${evaluation.missingFields.join(', ')}`;
           addMessage(updatedSession, {
             role: 'assistant',
-            content: prompts.join(' '),
+            content: `Follow-up needed — ask the user: ${followUp}`,
             triageData: result,
           });
-          setSession({ ...updatedSession });
+          setSession({ ...updatedSession, messages: [...updatedSession.messages] });
           return;
         }
 
@@ -103,7 +105,7 @@ export default function App() {
         if (evaluation.shouldForceTriage) {
           addMessage(updatedSession, {
             role: 'system',
-            content: 'Max follow-ups reached — generating triage with available information.',
+            content: 'Max follow-ups reached — triage generated with available information.',
           });
         }
         resetFollowUp(updatedSession);
@@ -115,22 +117,22 @@ export default function App() {
             intent: getIntentCategory(result.intent)?.label || result.intent,
             confidence: result.confidence,
           });
-          setSession({ ...updatedSession });
+          setSession({ ...updatedSession, messages: [...updatedSession.messages] });
           return;
         }
 
-        // high confidence
+        // high confidence — show triage notification, NOT the reply itself
         addMessage(updatedSession, {
           role: 'assistant',
-          content: result.reply,
+          content: 'Triage analysis ready — see Analysis Panel for details and suggested reply.',
           triageData: result,
         });
-        setSession({ ...updatedSession });
+        setSession({ ...updatedSession, messages: [...updatedSession.messages] });
       } catch (error) {
         const errorMessage = error instanceof ApiError ? error.message : 'Something went wrong. Please try again.';
-        const updatedSession = { ...session };
+        const updatedSession = { ...session, messages: [...session.messages] };
         addMessage(updatedSession, { role: 'error', content: errorMessage });
-        setSession(updatedSession);
+        setSession({ ...updatedSession, messages: [...updatedSession.messages] });
       } finally {
         setIsLoading(false);
       }
@@ -140,21 +142,24 @@ export default function App() {
 
   const handleConfirmConfidence = useCallback(() => {
     if (!pendingResult) return;
-    const updatedSession = { ...session };
+    const updatedSession = { ...session, messages: [...session.messages] };
     addMessage(updatedSession, {
       role: 'assistant',
-      content: pendingResult.reply,
+      content: 'Triage analysis ready — see Analysis Panel for details and suggested reply.',
       triageData: pendingResult,
     });
     setConfidenceBanner(null);
     setPendingResult(null);
-    setSession(updatedSession);
+    setSession({ ...updatedSession, messages: [...updatedSession.messages] });
   }, [pendingResult, session]);
 
   const handleProvideMoreInfo = useCallback(() => {
     setConfidenceBanner(null);
     setPendingResult(null);
   }, []);
+
+  // compute active triage from session directly (no useMemo — avoids stale reference)
+  const activeTriage = getLatestTriage(session.messages);
 
   return (
     <div className="flex h-screen flex-col bg-gray-950">

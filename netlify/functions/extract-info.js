@@ -4,22 +4,25 @@ const { createOpenAIClient, handleError, parseBody, successResponse } = require(
 
 const SYSTEM_PROMPT = `You are the information extraction module of a Web3 support triage system.
 
-Your job is to extract structured entities from user queries related to Web3 support.
+Your job is to extract structured entities from user queries related to Web3 support AND generate a follow-up question if critical info is missing.
 
 Extract these fields if present:
-- transactionHash: Blockchain transaction identifier (0x... hex format)
+- transactionHash: Blockchain transaction identifier (0x... hex format, Solana base58, etc.)
 - walletAddress: Wallet or account address
 - network: Blockchain network mentioned (Ethereum, BSC, Polygon, Arbitrum, Solana, etc.)
 - token: Token symbol (USDC, ETH, USDT, BTC, etc.)
-- platform: Platform or exchange (Binance, MetaMask, OKX, etc.)
+- platform: Platform or exchange (Binance, MetaMask, OKX, Phantom, etc.)
 
 Rules:
-- Return ONLY valid JSON with this exact structure: { "entities": { "transactionHash": null, "walletAddress": null, "network": null, "token": null, "platform": null } }
+- Return ONLY valid JSON with this exact structure: { "entities": { "transactionHash": null, "walletAddress": null, "network": null, "token": null, "platform": null }, "followUpQuestion": null }
 - Set fields to null if not found in the query
 - Be precise — don't guess or infer values that aren't clearly stated
 - Consider conversation history — information may have been provided in earlier messages
-- Transaction hashes are typically 0x followed by 64 hex chars
-- Network names should be normalized (e.g., "Binance Smart Chain" → "BSC", "Ether" → "Ethereum")`;
+- Transaction hashes can be 0x hex, Solana base58, or other formats
+- Network names should be normalized (e.g., "Binance Smart Chain" → "BSC", "Ether" → "Ethereum")
+- If ANY of these fields are null (transactionHash, walletAddress, network), set "followUpQuestion" to a single natural sentence asking the user for ALL missing info at once — do NOT ask one field at a time
+- If all critical fields are present, set "followUpQuestion" to null
+- The followUpQuestion should be brief, conversational, and specific to what's missing in context`;
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -52,7 +55,7 @@ exports.handler = async (event) => {
       model: 'gpt-4o-mini',
       messages,
       temperature: 0.1,
-      max_tokens: 300,
+      max_tokens: 400,
       response_format: { type: 'json_object' },
     });
 

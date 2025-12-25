@@ -44,22 +44,25 @@ Rules:
 // --- Information Extraction ---
 const EXTRACT_PROMPT = `You are the information extraction module of a Web3 support triage system.
 
-Your job is to extract structured entities from user queries related to Web3 support.
+Your job is to extract structured entities from user queries related to Web3 support AND generate a follow-up question if critical info is missing.
 
 Extract these fields if present:
-- transactionHash: Blockchain transaction identifier (0x... hex format)
+- transactionHash: Blockchain transaction identifier (0x... hex format, Solana base58, etc.)
 - walletAddress: Wallet or account address
 - network: Blockchain network mentioned (Ethereum, BSC, Polygon, Arbitrum, Solana, etc.)
 - token: Token symbol (USDC, ETH, USDT, BTC, etc.)
-- platform: Platform or exchange (Binance, MetaMask, OKX, etc.)
+- platform: Platform or exchange (Binance, MetaMask, OKX, Phantom, etc.)
 
 Rules:
-- Return ONLY valid JSON with this exact structure: { "entities": { "transactionHash": null, "walletAddress": null, "network": null, "token": null, "platform": null } }
+- Return ONLY valid JSON with this exact structure: { "entities": { "transactionHash": null, "walletAddress": null, "network": null, "token": null, "platform": null }, "followUpQuestion": null }
 - Set fields to null if not found in the query
 - Be precise — don't guess or infer values that aren't clearly stated
 - Consider conversation history — information may have been provided in earlier messages
-- Transaction hashes are typically 0x followed by 64 hex chars
-- Network names should be normalized (e.g., "Binance Smart Chain" → "BSC", "Ether" → "Ethereum")`;
+- Transaction hashes can be 0x hex, Solana base58, or other formats
+- Network names should be normalized (e.g., "Binance Smart Chain" → "BSC", "Ether" → "Ethereum")
+- If ANY of these fields are null (transactionHash, walletAddress, network), set "followUpQuestion" to a single natural sentence asking the user for ALL missing info at once — do NOT ask one field at a time
+- If all critical fields are present, set "followUpQuestion" to null
+- The followUpQuestion should be brief, conversational, and specific to what's missing in context`;
 
 // --- Triage ---
 const TRIAGE_PROMPT = `You are the triage analysis module of a Web3 support triage system.
@@ -69,6 +72,7 @@ Your job is to generate a structured triage analysis based on the classified int
 You must return a JSON object with this exact structure:
 {
   "issueType": "Human-readable issue type name",
+  "tags": ["short tag 1", "short tag 2"],
   "confidence": "High|Medium|Low",
   "userSituation": "Brief description of the user's situation in plain language",
   "likelyCause": "Most probable cause of the issue",
@@ -78,6 +82,8 @@ You must return a JSON object with this exact structure:
 }
 
 Guidelines:
+- tags should be 2-4 short descriptive labels that a moderator can scan at a glance (e.g. "bridge delay", "cross-chain", "pending deposit", "network mismatch", "stuck tx", "missing import", "exchange withdrawal", "scam alert", "phishing", "wrong address")
+- tags should describe the nature of the problem, NOT repeat entity values
 - Confidence should be "High" only when the cause is nearly certain, "Medium" for likely causes, "Low" when uncertain
 - likelyCause should reference known patterns:
   * Wrong network withdrawals from exchanges (e.g. sending via BSC when the wallet expects an L2)
@@ -153,6 +159,8 @@ async function handleExtractInfo(body) {
   const result = JSON.parse(completion.choices[0].message.content);
   const defaultEntities = { transactionHash: null, walletAddress: null, network: null, token: null, platform: null };
   result.entities = { ...defaultEntities, ...(result.entities || {}) };
+  // pass through the AI-generated follow-up question
+  if (!result.followUpQuestion) result.followUpQuestion = null;
   return result;
 }
 
@@ -176,8 +184,9 @@ async function handleTriage(body) {
   });
 
   const result = JSON.parse(completion.choices[0].message.content);
-  const defaultTriage = { issueType: intent, confidence: 'Low', userSituation: '', likelyCause: '', missingInfo: [], modAction: '', suggestedReply: '' };
+  const defaultTriage = { issueType: intent, tags: [], confidence: 'Low', userSituation: '', likelyCause: '', missingInfo: [], modAction: '', suggestedReply: '' };
   const triage = { ...defaultTriage, ...result };
+  triage.tags = Array.isArray(triage.tags) ? triage.tags : [];
   triage.missingInfo = Array.isArray(triage.missingInfo) ? triage.missingInfo : [];
   return { triage };
 }

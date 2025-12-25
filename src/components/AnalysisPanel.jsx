@@ -46,29 +46,74 @@ function ConfidenceMeter({ confidence }) {
   );
 }
 
-function EntityChips({ entities }) {
-  const fields = ['network', 'token', 'platform', 'transactionHash', 'walletAddress'];
+// issue tags — AI-generated descriptive labels for quick scanning
+function IssueTags({ tags }) {
+  if (!tags || tags.length === 0) return null;
 
   return (
     <div className="flex flex-wrap gap-1.5">
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 border border-brand-500/20 px-2.5 py-0.5 text-[11px] font-medium text-brand-300"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-brand-400" />
+          {tag}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// full data table with copy — all values visible and copyable for the moderator
+function EntityDataTable({ entities }) {
+  const [copiedKey, setCopiedKey] = useState(null);
+  const fields = ['network', 'token', 'platform', 'transactionHash', 'walletAddress'];
+
+  const handleCopy = (key, val) => {
+    navigator.clipboard.writeText(val);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1500);
+  };
+
+  return (
+    <div className="rounded-lg border border-gray-800/60 bg-gray-800/15 divide-y divide-gray-800/40">
       {fields.map((key) => {
         const val = entities[key];
         return (
-          <span
-            key={key}
-            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] ${
-              val
-                ? 'border-gray-700/60 bg-gray-800/50 text-gray-300'
-                : 'border-amber-500/15 bg-amber-500/5 text-amber-500/50 line-through'
-            }`}
-          >
-            <span className="text-[10px]">{ENTITY_ICONS[key]}</span>
-            {val ? (
-              <span className="font-mono">{val.length > 16 ? `${val.slice(0, 8)}...${val.slice(-6)}` : val}</span>
-            ) : (
-              <span>{ENTITY_LABELS[key]}</span>
+          <div key={key} className="flex items-start gap-3 px-3.5 py-2.5">
+            <span className="flex-shrink-0 pt-0.5 text-[10px]">{ENTITY_ICONS[key]}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-600">{ENTITY_LABELS[key]}</p>
+              {val ? (
+                <p className="mt-0.5 break-all font-mono text-xs text-gray-300">{val}</p>
+              ) : (
+                <p className="mt-0.5 text-xs text-amber-500/40 italic">not provided</p>
+              )}
+            </div>
+            {val && (
+              <button
+                onClick={() => handleCopy(key, val)}
+                className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] transition-colors ${
+                  copiedKey === key
+                    ? 'bg-green-500/10 text-green-400'
+                    : 'text-gray-600 hover:bg-gray-700/50 hover:text-gray-400'
+                }`}
+                title="Copy"
+              >
+                {copiedKey === key ? (
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                ) : (
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                  </svg>
+                )}
+              </button>
             )}
-          </span>
+          </div>
         );
       })}
     </div>
@@ -270,7 +315,7 @@ export default function AnalysisPanel({
             </div>
           )}
 
-          {/* Intent Badge + Confidence */}
+          {/* Intent Badge + Confidence + Tags */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 ${colors.bg} ${colors.border}`}>
@@ -299,16 +344,17 @@ export default function AnalysisPanel({
               </div>
             </div>
             <ConfidenceMeter confidence={triageData.confidence} />
+            <IssueTags tags={triage?.tags} />
           </div>
 
           {viewMode === 'text' ? (
             <>
-              {/* Extracted Entities */}
+              {/* Entity Data — full values with copy */}
               <div>
                 <h4 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                  Extracted Entities
+                  Extracted Data
                 </h4>
-                <EntityChips entities={triageData.entities} />
+                <EntityDataTable entities={triageData.entities} />
               </div>
 
               {/* Triage Breakdown */}

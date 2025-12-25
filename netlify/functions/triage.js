@@ -9,6 +9,7 @@ Your job is to generate a structured triage analysis based on the classified int
 You must return a JSON object with this exact structure:
 {
   "issueType": "Human-readable issue type name",
+  "tags": ["short tag 1", "short tag 2"],
   "confidence": "High|Medium|Low",
   "userSituation": "Brief description of the user's situation in plain language",
   "likelyCause": "Most probable cause of the issue",
@@ -18,6 +19,8 @@ You must return a JSON object with this exact structure:
 }
 
 Guidelines:
+- tags should be 2-4 short descriptive labels that a moderator can scan at a glance (e.g. "bridge delay", "cross-chain", "pending deposit", "network mismatch", "stuck tx", "missing import", "exchange withdrawal", "scam alert", "phishing", "wrong address")
+- tags should describe the nature of the problem, NOT repeat entity values
 - Confidence should be "High" only when the cause is nearly certain, "Medium" for likely causes, "Low" when uncertain
 - userSituation should be a concise summary anyone can understand
 - likelyCause should reference known patterns:
@@ -74,6 +77,7 @@ ${conversationHistory.length > 0 ? `Previous conversation: ${conversationHistory
     // Ensure required fields exist
     const defaultTriage = {
       issueType: intent,
+      tags: [],
       confidence: 'Low',
       userSituation: '',
       likelyCause: '',
@@ -84,6 +88,7 @@ ${conversationHistory.length > 0 ? `Previous conversation: ${conversationHistory
 
     const triage = { ...defaultTriage, ...result };
     triage.missingInfo = Array.isArray(triage.missingInfo) ? triage.missingInfo : [];
+    triage.tags = Array.isArray(triage.tags) ? triage.tags : [];
 
     return successResponse({ triage });
   } catch (error) {
